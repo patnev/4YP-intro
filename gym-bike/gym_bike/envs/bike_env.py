@@ -5,13 +5,22 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 
-
+draft_f = 0.01
+gamma = 0.999
+def reward_exp(obs):
+    
+    # a = abs(pre_v - obs[1]) *f_3
+    # a2 = abs(a_prev - a)*f_4
+    # #v_dif = (abs(obs[1] - 32))*v_dif_f
+    draft = -abs(obs[2]-obs[0]- 60)*draft_f
+    
+    return (5+draft )/10
 
 class BikeEnv(gym.Env):
   metadata = {'render.modes': ['human']}
   
   def __init__(self):
-      self.agent = Cyclist(50000,990,0,0.1,80,0.4)
+      self.agent = Cyclist(40000,1000,0,0.1,80,0.4)
       self.control = Cyclist(40000,1000,0,0.1,80,0.4)
       self.episode_count = 0
       self.time = 0
@@ -21,20 +30,21 @@ class BikeEnv(gym.Env):
       high = np.array([10000,1000,10000,1000],dtype=np.float32)
       low = np.array([0,0,0,0],dtype=np.float32)
       self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
-      self.dt = 3
+      self.dt = 0.5
       self.max_power = 990
-      self.action_space = spaces.Box(
-            low=0, high=self.max_power, shape=(1,), dtype=np.float32
-        )
+      #self.action_space = spaces.Box(
+       #     low=0, high=self.max_power, shape=(1,), dtype=np.float32
+       # )
+      self.action_space = spaces.Discrete(2)
       self.sep = 0
       self.state = None
       
    
   def step(self, a_action):
-     self.episode_count += 1
      self.sep = abs(self.control.pos - self.agent.pos) 
      
      #assert self.action_space.contains(a_action), "Invalid Action"
+     a_action = a_action * self.max_power
      
      c_action = self.controllerAction()
         
@@ -42,24 +52,32 @@ class BikeEnv(gym.Env):
      self.agent.modelUpdate(self.sep, a_action, self.isLeading(self.agent,self.control), self.dt)
      self.time += self.dt
      
+     
+     
+     
      self.state = [self.agent.pos,self.agent.vel,self.control.pos,self.control.vel]
-     reward = 0
+     act_reward = 0
      if self.agent.pos >= 1450:
          done = True
          if self.agent.pos>= self.control.pos:
-             reward = 1
+             act_reward = 1
      else:
         done = False
-         
+    
      #reward = - abs(self.control.pos - self.agent.pos -50)
+     alpha = gamma**self.episode_count
+     rew_exp  = reward_exp(self.state)
+     reward = rew_exp*alpha + (1-alpha)*act_reward
+     
      return np.array(self.state, dtype=np.float32),reward,done,{}
  
     
   def reset(self):
-         self.episode_count = 0
+         self.episode_count += 1
+
          self.agent.pos = 0
          self.agent.vel = 0.1
-         self.agent.energy = 50000
+         self.agent.energy = 40000
          
          self.control.pos = 0
          self.control.vel = 0.1
@@ -99,7 +117,7 @@ class BikeEnv(gym.Env):
                0.8, (0,0,0), 1, cv2.LINE_AA)
     
     cv2.imshow("test",self.canvas)
-    cv2.waitKey(10)
+    cv2.waitKey(1)
     
     return 
     
